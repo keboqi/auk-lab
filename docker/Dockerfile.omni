@@ -1,0 +1,16 @@
+# Verified public image digest, September 13, 2026. CUDA 13 / Blackwell stack.
+ARG OMNI_IMAGE=hongccc/sglang-omni@sha256:ebe4239e29a764ee3a2806385c061c5fd438a26f01458e503d3822dcba5790df
+FROM ${OMNI_IMAGE}
+ARG OMNI_REVISION=f58228dfbd34fc5d24cc2e72e04c14ecfe6762ea
+ENV SGLANG_OMNI_AUTO_CLONE=0 PYTHONUNBUFFERED=1
+WORKDIR /opt/auk-omni
+# No moving checkout or heavyweight package resolution during container startup.
+RUN curl --fail --location --retry 3 "https://codeload.github.com/sgl-project/sglang-omni/tar.gz/${OMNI_REVISION}" \
+    | tar -xz --strip-components=1 -C /opt/auk-omni \
+    && python3 -m pip install --no-deps --no-build-isolation -e /opt/auk-omni \
+    && python3 -c "from sglang_omni.models.auk.config import AuKPipelineConfig; import soundfile, librosa, transformers; print(AuKPipelineConfig.__name__)"
+LABEL org.opencontainers.image.source="https://github.com/sgl-project/sglang-omni" \
+      org.opencontainers.image.revision="${OMNI_REVISION}"
+COPY docker/serve.py /opt/auk-lab-serve.py
+COPY lab/runtime.json /opt/auk-lab-runtime.json
+ENTRYPOINT ["python3", "/opt/auk-lab-serve.py"]

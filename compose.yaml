@@ -1,0 +1,54 @@
+name: auk-lab
+
+x-omni: &omni
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.omni
+    args:
+      OMNI_IMAGE: ${OMNI_IMAGE:-hongccc/sglang-omni@sha256:ebe4239e29a764ee3a2806385c061c5fd438a26f01458e503d3822dcba5790df}
+  image: auk-lab-omni:20260913
+  init: true
+  restart: "no"
+  shm_size: 16gb
+  volumes:
+    - hf-cache:/root/.cache/huggingface
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            device_ids: ["${GPU_DEVICE:-0}"]
+            capabilities: [gpu]
+  healthcheck:
+    test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+    interval: 20s
+    timeout: 5s
+    retries: 90
+    start_period: 180s
+
+services:
+  lab:
+    build: .
+    ports: ["${LAB_BIND:-127.0.0.1}:${LAB_PORT:-7865}:7865"]
+    environment:
+      AUK_FLASH_URL: http://auk-flash:8000
+      AUK_BASE_URL: http://auk-base:8000
+      AUK_LAB_DATA: /data
+    volumes: ["./data:/data"]
+    init: true
+    restart: unless-stopped
+  auk-flash:
+    <<: *omni
+    profiles: [flash, both]
+    ports: ["127.0.0.1:${FLASH_PORT:-8101}:8000"]
+    environment:
+      AUK_VARIANT: flash
+  auk-base:
+    <<: *omni
+    profiles: [base, both]
+    ports: ["127.0.0.1:${BASE_PORT:-8102}:8000"]
+    environment:
+      AUK_VARIANT: base
+
+volumes:
+  hf-cache:

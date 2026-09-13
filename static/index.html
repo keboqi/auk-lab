@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AuK Lab · Speech playground</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+<header>
+  <a class="brand" href="/"><span class="brand-mark">a<span>↗</span></span><span>AuK <b>Lab</b><small>SPEECH PLAYGROUND</small></span></a>
+  <div class="environment"><span class="pulse"></span> RTX PRO 6000 <span class="muted">/</span> SGLang-Omni</div>
+  <button id="refresh-status" class="quiet">Check services</button>
+</header>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<div class="shell">
+  <aside>
+    <div class="aside-title">EXPERIMENTS <span id="task-count"></span></div>
+    <nav id="tasks" aria-label="Speech tasks"></nav>
+    <div class="aside-footer"><span class="tiny-label">MODEL SERVICES</span><div id="services">Checking connections…</div><p>24 kHz mono · up to 30s<br>Complete-clip generation</p></div>
+  </aside>
+  <main>
+    <div class="page-heading"><div><div class="eyebrow" id="task-group">GENERATE / 01</div><h1 id="task-title">Voice design</h1><p id="task-description"></p></div><span class="badge">EXPERIMENTAL</span></div>
+    <div class="workspace">
+      <section class="controls" aria-label="Experiment controls">
+        <form id="run-form">
+          <section class="panel" id="source-panel">
+            <div class="panel-heading"><h2><span>01</span> Source audio</h2><button type="button" id="clear-source" class="text-button">Clear</button></div>
+            <label class="upload-box" for="file"><span class="upload-icon">↥</span><strong>Choose a recording</strong><small>WAV, MP3, FLAC, OGG or video · max 50 MB</small><input id="file" type="file" accept="audio/*,video/*"></label>
+            <div class="field-grid crop"><label>Crop start <span>seconds</span><input id="crop-start" type="number" min="0" step="0.01" value="0"></label><label>Crop end <span>optional</span><input id="crop-end" type="number" min="0" step="0.01" placeholder="End of file"></label><button type="button" id="upload-button" class="secondary">Prepare clip</button></div>
+            <p class="hint">Choose at most 30 seconds. Resampled to mono 24 kHz; silence and volume are preserved.</p>
+            <label class="saved-label">Or use a saved clip<select id="source-select"><option value="">No source selected</option></select></label>
+            <div id="source-preview" hidden><audio id="source-audio" controls preload="metadata"></audio><div id="source-info" class="audio-info"></div></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><h2><span id="instruction-number">02</span> Direction</h2><button type="button" id="reset-template" class="text-button">Reset example</button></div>
+            <label id="text-field">Text to speak<textarea id="speech-text" rows="3" placeholder="Enter the exact words to synthesize…"></textarea></label>
+            <label id="instruction-field"><span id="instruction-label">Voice description</span><textarea id="instruction" rows="4" placeholder="Describe the edit you want…"></textarea></label>
+            <p id="instruction-hint" class="hint">Instructions can be written in English or Chinese.</p>
+            <div id="speed-field" hidden><label>Speed factor<select id="speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25" selected>1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><p class="hint">Changing this control updates the instruction. Keep the instruction and factor consistent if editing it manually.</p></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><h2><span id="settings-number">03</span> Run settings</h2></div>
+            <div class="model-picker" role="group" aria-label="Models to evaluate"><label><input type="checkbox" id="model-flash" checked><div><strong>AuK Flash</strong><small>4 steps / CFG off</small></div><span>FAST</span></label><label><input type="checkbox" id="model-base"><div><strong>AuK Base</strong><small>32 steps / CFG 2</small></div><span>FULL</span></label></div>
+            <p class="hint">Select both for sequential A/B runs with the same seed. Both services must be ready.</p>
+            <div class="field-grid"><label>Output duration <span>seconds</span><input id="duration" type="number" min="0.02" max="30" step="0.02" placeholder="Match source"></label><label>Starting seed<input id="seed" type="number" min="0" max="4294967290" step="1" value="1234"></label><label>Takes per model<select id="repeats"><option value="1">1 take</option><option value="2">2 takes</option><option value="3">3 takes</option><option value="5">5 takes</option></select></label></div>
+            <p class="hint" id="duration-hint">Set an explicit duration for synthesis. Each additional take increments the seed.</p>
+            <details><summary>Inspect backend request</summary><button type="button" id="preview-request" class="secondary">Build request preview</button><pre id="request-preview">Preview the actual route and payload before running.</pre></details>
+          </section>
+          <div class="run-bar"><button type="submit" id="run-button" class="primary">Generate experiment <span>↗</span></button><span>Audio appears when the clip is complete.</span></div>
+        </form>
+      </section>
+      <section class="results" aria-label="Experiment results">
+        <div class="results-heading"><h2>Listening desk</h2><span class="tiny-label">COMPARE & EVALUATE</span></div>
+        <div id="active-job" hidden><div class="job-banner"><span id="job-progress"></span><button id="load-settings" class="quiet">Load settings</button><button id="cancel-job" class="quiet">Cancel remaining</button></div><audio id="job-source-audio" aria-label="Experiment source audio" controls preload="metadata" hidden></audio></div>
+        <div id="result-cards"><div class="empty-state"><div class="waveform" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><h3>A place to listen closely.</h3><p>Choose an experiment, add your direction,<br>and compare what the models produce.</p><span>Audio · timing · quality notes</span></div></div>
+        <div class="history-heading"><h2>Experiment history</h2><div><a href="/api/export?format=json">JSON ↗</a><a href="/api/export?format=csv">CSV ↗</a></div></div>
+        <div id="history" class="history"><p class="hint">No experiments yet.</p></div>
+        <p class="footnote">RTF = request time ÷ generated duration. Includes HTTP and backend work; excludes this app's queue and upload. Timings are measured, quality scores are your listening notes.</p>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

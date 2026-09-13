@@ -1,0 +1,9 @@
+{
+  "sglang_revision": "f58228dfbd34fc5d24cc2e72e04c14ecfe6762ea",
+  "image": "hongccc/sglang-omni@sha256:ebe4239e29a764ee3a2806385c061c5fd438a26f01458e503d3822dcba5790df",
+  "models": {
+    "flash": {"id": "tencent/AuK-Flash", "revision": "575b92f0895f75180bf2cbd35f2e176c5732b8ed"},
+    "base": {"id": "tencent/AuK", "revision": "790742b71a4430120daf2b2099192abae449eb9f"}
+  },
+  "encoder": {"id": "Qwen/Qwen2.5-Omni-3B", "revision": "f75b40e3da2003cdd6e1829b1f420ca70797c34e"}
+}
