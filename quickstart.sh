@@ -8,6 +8,7 @@ usage() {
 AuK Lab quickstart (Linux / NVIDIA Docker)
 
   bash quickstart.sh [--model flash|base|both] [--gpu INDEX] [--port PORT]
+                    [--backend sglang|official|both]
                     [--bind ADDRESS] [--no-wait] [--wait-seconds SECONDS]
 
 Defaults: Flash, GPU 0, UI 7865, loopback binding, wait up to 30 minutes.
@@ -19,14 +20,16 @@ EOF
 }
 
 variant=flash
+backend=sglang
 wait_for_models=1
 wait_seconds=1800
 while (($#)); do
   case "$1" in
-    --model|--gpu|--port|--bind|--wait-seconds)
+    --model|--backend|--gpu|--port|--bind|--wait-seconds)
       (($# >= 2)) || { echo "Missing value for $1" >&2; exit 2; }
       case "$1" in
         --model) variant="$2" ;;
+        --backend) backend="$2" ;;
         --gpu) export GPU_DEVICE="$2" ;;
         --port) export LAB_PORT="$2" ;;
         --bind) export LAB_BIND="$2" ;;
@@ -39,6 +42,8 @@ while (($#)); do
   esac
 done
 case "$variant" in flash|base|both) ;; *) echo 'Model must be flash, base, or both.' >&2; exit 2 ;; esac
+case "$backend" in sglang|official|both) ;; *) echo 'Backend must be sglang, official, or both.' >&2; exit 2 ;; esac
+[[ "$variant" != both || "$backend" != both ]] || { echo 'Compare one variant at a time: --model flash or base.' >&2; exit 2; }
 [[ "$wait_seconds" =~ ^[0-9]+$ ]] && ((wait_seconds > 0)) || { echo 'Wait timeout must be a positive integer.' >&2; exit 2; }
 [[ -z "${GPU_DEVICE:-}" || "$GPU_DEVICE" =~ ^[0-9]+$ ]] || { echo 'GPU index must be a nonnegative integer.' >&2; exit 2; }
 if [[ -n "${LAB_PORT:-}" ]]; then
@@ -60,20 +65,22 @@ else
   echo 'Using existing .env settings.'
 fi
 mkdir -p data
-docker compose --profile "$variant" config --quiet
-echo 'Building isolated application and SGLang-Omni environments, then starting services…'
-bash auk-lab.sh up "$variant"
+docker compose --profile '*' config --quiet
+echo 'Building application and selected inference environments, then starting services…'
+bash auk-lab.sh up "$variant" "$backend"
 if (( ! wait_for_models )); then exit 0; fi
 
 echo 'Waiting for model downloads and readiness. Ctrl+C stops waiting; containers keep running.'
 deadline=$((SECONDS + wait_seconds))
 while ((SECONDS < deadline)); do
-  if docker compose exec -T lab python - "$variant" <<'PY'
+  if docker compose exec -T lab python - "$variant" "$backend" <<'PY'
 import json, sys, urllib.request
 try:
     with urllib.request.urlopen('http://127.0.0.1:7865/api/status', timeout=10) as response:
         models = json.load(response)['models']
     wanted = ['flash', 'base'] if sys.argv[1] == 'both' else [sys.argv[1]]
+    families = ['sglang', 'official'] if sys.argv[2] == 'both' else [sys.argv[2]]
+    wanted = [('official_' if family == 'official' else '') + name for name in wanted for family in families]
     raise SystemExit(0 if all(models[name]['ready'] for name in wanted) else 1)
 except (OSError, ValueError, KeyError):
     raise SystemExit(1)

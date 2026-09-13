@@ -28,7 +28,7 @@ function selectTask(id, reset = true) {
 }
 function request() {
   const models = ['flash', 'base'].filter(model => $(`model-${model}`).checked);
-  return {task: state.task.id, models, source_id: state.task.id === 'voice_design' ? null : $('source-select').value || null,
+  return {task: state.task.id, backend: $('backend').value, models, source_id: state.task.id === 'voice_design' ? null : $('source-select').value || null,
     text: $('speech-text').value, instruction: $('instruction').value, duration: $('duration').value === '' ? null : Number($('duration').value),
     speed_factor: Number($('speed').value), seed: Number($('seed').value), repeats: Number($('repeats').value)};
 }
@@ -46,7 +46,8 @@ function sourceChanged() {
 async function refreshStatus() {
   const status = await api('/api/status'); $('services').replaceChildren();
   for (const [model, info] of Object.entries(status.models)) {
-    const line = el('div', `service${info.ready ? ' ready' : ''}`); line.append(el('span', 'service-dot'), el('span', '', model === 'flash' ? 'AuK Flash' : 'AuK Base'), el('small', '', info.ready ? 'READY' : 'OFFLINE'));
+    const label = `${model.startsWith('official_') ? 'Official' : 'SGLang'} ${model.endsWith('flash') ? 'Flash' : 'Base'}`;
+    const line = el('div', `service${info.ready ? ' ready' : ''}`); line.append(el('span', 'service-dot'), el('span', '', label), el('small', '', info.ready ? 'READY' : 'OFFLINE'));
     line.title = info.error || info.models.join(', '); $('services').append(line);
   }
 }
@@ -55,15 +56,15 @@ function renderHistory() {
   if (!state.jobs.length) { $('history').append(el('p', 'hint', 'No experiments yet.')); return; }
   state.jobs.forEach(job => {
     const button = el('button', 'history-row' + (job.id === state.selected ? ' selected' : '')); button.type = 'button';
-    const copy = el('div'); copy.append(el('strong', '', taskLabel(job.request.task)), el('small', '', `${new Date(job.created_at).toLocaleString()} · ${job.request.models.join(' + ')} · seed ${job.request.seed}`));
+    const copy = el('div'); copy.append(el('strong', '', taskLabel(job.request.task)), el('small', '', `${new Date(job.created_at).toLocaleString()} · ${job.request.backend || 'sglang'} / ${job.request.models.join(' + ')} · seed ${job.request.seed}`));
     button.append(copy, el('span', 'status', job.status)); button.onclick = () => showJob(job, true); $('history').append(button);
   });
 }
 function metric(value, label) { const node = el('div', 'metric'); node.append(el('strong', '', value), el('small', '', label)); return node; }
 function renderResult(job, result) {
   const card = el('article', 'result-card'); const top = el('div', 'result-top');
-  top.append(el('h3', '', result.model === 'flash' ? 'AuK Flash' : 'AuK Base'), el('span', 'pill', `seed ${result.seed}`));
-  if (result.audio_url) { const link = el('a', '', 'WAV ↓'); link.href = result.audio_url; link.download = `${job.request.task}-${result.model}-${result.seed}.wav`; top.append(link); }
+  top.append(el('h3', '', `${result.backend === 'official' ? 'Official' : 'SGLang'} · AuK ${result.model === 'flash' ? 'Flash' : 'Base'}`), el('span', 'pill', `seed ${result.seed}`));
+  if (result.audio_url) { const link = el('a', '', 'WAV ↓'); link.href = result.audio_url; link.download = `${job.request.task}-${result.backend || 'sglang'}-${result.model}-${result.seed}.wav`; top.append(link); }
   card.append(top);
   if (result.status === 'failed') { card.append(el('p', 'error', result.error)); return card; }
   const audio = el('audio'); audio.controls = true; audio.preload = 'metadata'; audio.src = result.audio_url; card.append(audio);
@@ -83,7 +84,7 @@ function renderResult(job, result) {
   const save = el('button', 'secondary', 'Save notes'); const feedback = el('span', 'review-status');
   save.onclick = async () => { save.disabled = true; try { const body = {verdict: verdict.value, notes: notes.value}; for (const key of Object.keys(selects)) body[key] = selects[key].value ? Number(selects[key].value) : null; await api(`/api/jobs/${job.id}/results/${result.id}/review`, json('PUT', body)); feedback.textContent = 'Saved'; } catch (error) { toast(error.message, true); } finally { save.disabled = false; } };
   actions.append(verdict, save); details.append(notes, actions, feedback); card.append(details);
-  const provenance = el('details'); provenance.append(el('summary', '', 'Inference record'), el('pre', '', JSON.stringify({route: result.route, model: result.model_id, payload: result.payload, backend: result.backend_meta, runtime: result.runtime}, null, 2))); card.append(provenance);
+  const provenance = el('details'); provenance.append(el('summary', '', 'Inference record'), el('pre', '', JSON.stringify({engine: result.backend || 'sglang', route: result.route, model: result.model_id, payload: result.payload, backend: result.backend_meta, runtime: result.runtime}, null, 2))); card.append(provenance);
   return card;
 }
 function showJob(job, reset = false) {
@@ -135,6 +136,7 @@ $('cancel-job').onclick = async () => { try { const job = await api(`/api/jobs/$
 $('load-settings').onclick = () => {
   const job = state.jobs.find(item => item.id === state.selected); if (!job) return;
   const saved = job.request; selectTask(saved.task, false);
+  $('backend').value = saved.backend || 'sglang';
   $('speech-text').value = saved.text; $('instruction').value = saved.instruction; $('duration').value = saved.duration ?? '';
   $('seed').value = saved.seed; $('repeats').value = saved.repeats; $('speed').value = saved.speed_factor;
   ['flash', 'base'].forEach(model => { $(`model-${model}`).checked = saved.models.includes(model); });

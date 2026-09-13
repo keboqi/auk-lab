@@ -12,5 +12,6 @@ RUN curl --fail --location --retry 3 "https://codeload.github.com/sgl-project/sg
 LABEL org.opencontainers.image.source="https://github.com/sgl-project/sglang-omni" \
       org.opencontainers.image.revision="${OMNI_REVISION}"
 COPY docker/serve.py /opt/auk-lab-serve.py
+COPY docker/inspect_edit.py /opt/auk-lab-inspect-edit.py
 COPY lab/runtime.json /opt/auk-lab-runtime.json
 ENTRYPOINT ["python3", "/opt/auk-lab-serve.py"]

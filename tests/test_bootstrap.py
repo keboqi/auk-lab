@@ -40,16 +40,25 @@ def test_bootstrap_defaults_overrides_and_preserves_environment(tmp_path):
     assert (tmp_path / ".env").read_text() == (tmp_path / ".env.example").read_text()
     calls = (tmp_path / "calls.txt").read_text()
     assert "compose --profile flash up -d --build" in calls
-    assert "compose --profile both stop auk-base" in calls
+    assert "compose --profile * stop auk-base official-flash official-base" in calls
     (tmp_path / ".env").write_text("LAB_PORT=9999\n", encoding="utf-8")
     result = subprocess.run(invoke + ["--model", "both", "--gpu", "0", "--port", "7870", "--no-wait"],
                             cwd=tmp_path, env=env, capture_output=True, text=True, encoding="utf-8", timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
     assert (tmp_path / ".env").read_text() == "LAB_PORT=9999\n"
     assert "compose --profile both up -d --build" in (tmp_path / "calls.txt").read_text()
+    result = subprocess.run(invoke + ["--backend", "official", "--model", "flash", "--no-wait"],
+                            cwd=tmp_path, env=env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "compose --profile official-flash up -d --build" in (tmp_path / "calls.txt").read_text()
+    result = subprocess.run(invoke + ["--backend", "both", "--model", "base", "--no-wait"],
+                            cwd=tmp_path, env=env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "compose --profile compare-base up -d --build" in (tmp_path / "calls.txt").read_text()
 
 
-@pytest.mark.parametrize("args", [["--model", "unknown"], ["--port", "99999"], ["--gpu", "x"], ["--model"]])
+@pytest.mark.parametrize("args", [["--model", "unknown"], ["--port", "99999"], ["--gpu", "x"], ["--model"],
+                                  ["--backend", "bad"], ["--backend", "both", "--model", "both"]])
 def test_bad_bootstrap_arguments_fail_before_host_changes(args):
     result = subprocess.run([bash_path(), str(ROOT / "quickstart.sh"), *args], capture_output=True, text=True, encoding="utf-8", timeout=10)
     assert result.returncode == 2

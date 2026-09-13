@@ -102,26 +102,29 @@ class Runner:
         metadata, source = self.source(request)
         job.update(status="running", started_at=now(), progress="Checking model services")
         self.save(job)
-        readiness = {model: await self.client.status(model) for model in request.models}
+        backends = ["sglang", "official"] if request.backend == "both" else [request.backend]
+        targets = [(backend, model, "official_" + model if backend == "official" else model)
+                   for model in request.models for backend in backends]
+        readiness = {key: await self.client.status(key) for _, _, key in targets}
         if job["cancel_requested"]:
             job.update(status="cancelled", finished_at=now())
             self.save(job)
             return
         # Fail the whole comparison up front instead of producing a misleading one-sided A/B.
-        offline = [model for model in request.models if not readiness[model]["ready"]]
+        offline = [key for _, _, key in targets if not readiness[key]["ready"]]
         if offline:
             raise ValueError("Model service unavailable: " + "; ".join(f"{model}: {readiness[model]['error']}" for model in offline))
         for repeat in range(request.repeats):
-            for model in request.models:
+            for backend, model, endpoint in targets:
                 if job["cancel_requested"]:
                     break
                 seed = request.seed + repeat
                 route, payload, duration = build_request(request, model, source, metadata["duration"] if metadata else None, seed)
-                job["progress"] = f"{model.title()} · take {repeat + 1}/{request.repeats} · generating {duration:g}s"
+                job["progress"] = f"{backend} / {model.title()} · take {repeat + 1}/{request.repeats} · generating {duration:g}s"
                 self.save(job)
-                result = dict(id=new_id(), model=model, model_id=MODELS[model], seed=seed, take=repeat + 1,
+                result = dict(id=new_id(), model=model, backend=backend, model_id=MODELS[model], seed=seed, take=repeat + 1,
                               created_at=now(), requested_duration=duration, route=route,
-                              sglang_revision=SGLANG_REVISION, review=Review().model_dump())
+                              sglang_revision=SGLANG_REVISION if backend == "sglang" else None, review=Review().model_dump())
                 result["runtime"] = RUNTIME
                 # Save exact inference controls without duplicating the base64 source in every manifest.
                 recorded = copy.deepcopy(payload)
@@ -132,7 +135,7 @@ class Runner:
                 result["payload"] = recorded
                 started = time.perf_counter()
                 try:
-                    audio, backend_meta = await self.client.generate(model, route, payload)
+                    audio, backend_meta = await self.client.generate(endpoint, route, payload)
                     elapsed = time.perf_counter() - started
                     # User cancellation doesn't claim to abort upstream GPU work or release the worker early.
                     if job["cancel_requested"]:

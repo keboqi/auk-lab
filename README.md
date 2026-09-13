@@ -1,7 +1,8 @@
 # AuK Lab
 
 A standalone listening and evaluation app for **AuK and AuK-Flash**, served by
-**SGLang-Omni** on a Linux machine with an **RTX PRO 6000 Blackwell (96 GB)**.
+**SGLang-Omni or the official Tencent AuK Python implementation** on a Linux
+machine with an **RTX PRO 6000 Blackwell (96 GB)**.
 It has no dependency on the IndexTTS app, its Python environment, ports, or data.
 
 ## Start on the GPU host
@@ -19,8 +20,8 @@ cd auk-lab
 bash quickstart.sh
 ```
 
-The script checks Docker/NVIDIA access, creates `.env` if missing, builds both
-isolated runtime environments, starts Flash and the UI, and waits for readiness.
+The script checks Docker/NVIDIA access, creates `.env` if missing, builds the
+selected runtime and UI, starts Flash and the UI, and waits for readiness.
 Python, Conda, and CUDA packages do not need to be installed on the host.
 Existing `.env` settings are preserved. Host drivers and Docker remain prerequisites.
 
@@ -62,6 +63,89 @@ Defaults: UI `7865`, Flash `8101`, Base `8102`. All published ports bind to
 loopback. The evaluation app has no authentication; use an SSH tunnel or trusted
 LAN access rather than exposing it publicly.
 
+## Compare the official Python backend with SGLang-Omni
+
+Update an existing checkout and start one model variant on both engines:
+
+```bash
+git pull --ff-only
+bash quickstart.sh --backend both --model flash
+# Or compare the Base model:
+bash quickstart.sh --backend both --model base
+```
+
+Select **Compare SGLang + Official** in the UI's **Inference backend** control,
+then choose the matching model variant. Each take runs sequentially on both
+engines with the same source, instruction, duration, and seed. Result cards,
+history, inference records, WAV filenames, and exports identify the engine.
+Existing experiments default to SGLang when their saved backend is absent.
+
+For the smallest GPU memory footprint, use one engine at a time:
+
+```bash
+bash quickstart.sh --backend official --model flash
+# After testing, switch to SGLang with the same saved clip:
+bash quickstart.sh --backend sglang --model flash
+```
+
+Use **Load settings** on a saved experiment, change **Inference backend**, and
+rerun. Switching stops unselected model services and preserves data/checkpoints.
+Two resident engines' peak memory on the 96 GB card still needs measurement;
+the bootstrap intentionally does not start all four model/engine combinations.
+Official services publish loopback ports `8201` (Flash) and `8202` (Base).
+
+The official adapter calls the unmodified `AukInfer.generate()` from Tencent's
+source at `0dfd4d39015078351217b09a40e263355aaa646b`. It uses the same pinned AuK,
+Flash, and Qwen checkpoints as SGLang. The image reuses the verified CUDA 13
+platform image for Blackwell and preserves its Torch/Transformers versions,
+instead of installing upstream's default Torch 2.7 dependency set. Thus this
+compares the two model implementations on our CUDA stack, not every dependency
+of Tencent's recommended environment. The official container runs no SGLang
+model or scheduler. Its HTTP adapter implements only the lab's WAV, nonstreaming
+requests; it is not a general OpenAI API server.
+
+Both use raw instructions without the optional Prompt Enhancer, ASR, VAD, or
+task-specific loudness processing. This keeps the first editing comparison
+focused on model implementation. It does not reproduce the official Gradio
+demo's optional preprocessing. Matching seeds do not imply bit-identical output
+across implementations.
+
+## Investigate edits that reproduce the source
+
+The original launcher forced BF16 DiT weight storage. The default now follows
+SGLang's upstream parity recipe: **FP32 DiT storage with BF16 autocast**. This
+removes one numerical difference; it is **not a confirmed fix** for ignored edits.
+`AUK_WEIGHT_DTYPE=bfloat16` in `.env` opts SGLang back into the former speed mode.
+The official implementation always follows its FP32/BF16 recipe. Base sampling
+can be set with `AUK_BASE_NFE` and `AUK_BASE_CFG`; Flash locks its released 4-step,
+CFG-off recipe in both implementations. Restart services after changing settings.
+
+After the selected backend is ready, run the following with a source ID from an
+existing experiment:
+
+```bash
+bash diagnose-edits.sh YOUR_SOURCE_ID flash sglang
+bash diagnose-edits.sh YOUR_SOURCE_ID flash official
+```
+
+The script runs `把'跑车'替换为'嘉年华'` plus opposite ±10 dB volume instructions
+with seed 1234. Use that content probe on a recording containing 跑车, or customize:
+
+```bash
+docker compose exec -T lab python tools/diagnose_edits.py \
+  --source-id YOUR_SOURCE_ID --model base --backend official \
+  --instruction 'Replace the word actually present in your recording.'
+```
+
+Probes appear in the UI and save WAVs/job records under `data/diagnostics/`.
+Reports measure sample equality, RMS changes, and unaligned cosine similarity.
+These measurements do not grade instruction following: listen to the actual
+words and contrastive edits. For SGLang, the shell script also checks its installed
+request parser and Qwen processor on CPU, logging the instruction, template,
+audio feature shapes, and token count without logging the inline audio bytes.
+That inspection does not observe live worker hidden states. Nothing is uploaded
+outside your configured inference services.
+
 ## What you can test
 
 The 21 presets cover every advertised task family:
@@ -83,8 +167,8 @@ reference is not a useful test of all transformations.
 
 1. Choose a task and upload a clip, optionally setting crop start/end first.
 2. Adjust the instruction and target duration. Inspect the request if needed.
-3. Select Flash, Base, or both. Choose 1–5 takes; seeds increment per take and
-   match between models.
+3. Select the inference backend and Flash, Base, or both. Choose 1–5 takes;
+   seeds increment per take and match between models/backends.
 4. Listen to the experiment's source and outputs. Save content/identity/
    instruction/quality scores, a verdict, and notes.
 5. Use an output as the next source to explore chained edits. Parent run IDs are
@@ -153,6 +237,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 export AUK_FLASH_URL=http://127.0.0.1:8101
 export AUK_BASE_URL=http://127.0.0.1:8102
+export AUK_OFFICIAL_FLASH_URL=http://127.0.0.1:8201
+export AUK_OFFICIAL_BASE_URL=http://127.0.0.1:8202
 uvicorn lab.app:app --host 127.0.0.1 --port 7865 --workers 1
 ```
 
@@ -177,6 +263,7 @@ After the GPU services report ready, run a real inference smoke test:
 # Run from a Python environment with httpx installed:
 python tools/smoke.py --model flash
 python tools/smoke.py --model both
+python tools/smoke.py --backend official --model flash
 # Or use the running UI container, which already has httpx:
 docker compose exec -T lab python - < tools/smoke.py
 ```
@@ -186,6 +273,10 @@ browser UI was inspected locally. Tests inject a mock SGLang transport and
 explicit synthetic tones only inside tests. **Docker image build, real GPU
 inference, VRAM use, and audio quality still require validation on the Linux
 RTX PRO 6000 host.**
+
+The official adapter is tested with an injected fake model only. The reported
+server TTS success covers the original SGLang deployment; editing quality and
+the new official Docker backend still need the on-server comparison.
 
 ## Project layout
 

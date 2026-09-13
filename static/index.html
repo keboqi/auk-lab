@@ -9,7 +9,7 @@
 <body>
 <header>
   <a class="brand" href="/"><span class="brand-mark">a<span>↗</span></span><span>AuK <b>Lab</b><small>SPEECH PLAYGROUND</small></span></a>
-  <div class="environment"><span class="pulse"></span> RTX PRO 6000 <span class="muted">/</span> SGLang-Omni</div>
+  <div class="environment"><span class="pulse"></span> RTX PRO 6000 <span class="muted">/</span> SGLang + Official</div>
   <button id="refresh-status" class="quiet">Check services</button>
 </header>
 <div id="toast" role="status" aria-live="polite" hidden></div>
@@ -41,6 +41,8 @@
           </section>
           <section class="panel">
             <div class="panel-heading"><h2><span id="settings-number">03</span> Run settings</h2></div>
+            <label>Inference backend<select id="backend"><option value="sglang">SGLang-Omni</option><option value="official">Official AuK Python</option><option value="both">Compare SGLang + Official</option></select></label>
+            <p class="hint">Comparisons use the same instruction, source, duration, and seed. Start the selected services first. For one backend at a time, use Load settings on a saved experiment and change the backend.</p>
             <div class="model-picker" role="group" aria-label="Models to evaluate"><label><input type="checkbox" id="model-flash" checked><div><strong>AuK Flash</strong><small>4 steps / CFG off</small></div><span>FAST</span></label><label><input type="checkbox" id="model-base"><div><strong>AuK Base</strong><small>32 steps / CFG 2</small></div><span>FULL</span></label></div>
             <p class="hint">Select both for sequential A/B runs with the same seed. Both services must be ready.</p>
             <div class="field-grid"><label>Output duration <span>seconds</span><input id="duration" type="number" min="0.02" max="30" step="0.02" placeholder="Match source"></label><label>Starting seed<input id="seed" type="number" min="0" max="4294967290" step="1" value="1234"></label><label>Takes per model<select id="repeats"><option value="1">1 take</option><option value="2">2 takes</option><option value="3">3 takes</option><option value="5">5 takes</option></select></label></div>

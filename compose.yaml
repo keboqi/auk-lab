@@ -1,5 +1,10 @@
 name: auk-lab
 
+x-inference: &inference
+  AUK_WEIGHT_DTYPE: ${AUK_WEIGHT_DTYPE:-float32}
+  AUK_BASE_NFE: ${AUK_BASE_NFE:-32}
+  AUK_BASE_CFG: ${AUK_BASE_CFG:-2.0}
+
 x-omni: &omni
   build:
     context: .
@@ -33,21 +38,51 @@ services:
     environment:
       AUK_FLASH_URL: http://auk-flash:8000
       AUK_BASE_URL: http://auk-base:8000
+      AUK_OFFICIAL_FLASH_URL: http://official-flash:8000
+      AUK_OFFICIAL_BASE_URL: http://official-base:8000
       AUK_LAB_DATA: /data
     volumes: ["./data:/data"]
     init: true
     restart: unless-stopped
   auk-flash:
     <<: *omni
-    profiles: [flash, both]
+    profiles: [flash, both, compare-flash]
     ports: ["127.0.0.1:${FLASH_PORT:-8101}:8000"]
     environment:
+      <<: *inference
       AUK_VARIANT: flash
   auk-base:
     <<: *omni
-    profiles: [base, both]
+    profiles: [base, both, compare-base]
     ports: ["127.0.0.1:${BASE_PORT:-8102}:8000"]
     environment:
+      <<: *inference
+      AUK_VARIANT: base
+  official-flash:
+    <<: *omni
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.official
+      args:
+        OMNI_IMAGE: ${OMNI_IMAGE:-hongccc/sglang-omni@sha256:ebe4239e29a764ee3a2806385c061c5fd438a26f01458e503d3822dcba5790df}
+    image: auk-lab-official:20260913
+    profiles: [official-flash, official-both, compare-flash]
+    ports: ["127.0.0.1:${OFFICIAL_FLASH_PORT:-8201}:8000"]
+    environment:
+      <<: *inference
+      AUK_VARIANT: flash
+  official-base:
+    <<: *omni
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.official
+      args:
+        OMNI_IMAGE: ${OMNI_IMAGE:-hongccc/sglang-omni@sha256:ebe4239e29a764ee3a2806385c061c5fd438a26f01458e503d3822dcba5790df}
+    image: auk-lab-official:20260913
+    profiles: [official-base, official-both, compare-base]
+    ports: ["127.0.0.1:${OFFICIAL_BASE_PORT:-8202}:8000"]
+    environment:
+      <<: *inference
       AUK_VARIANT: base
 
 volumes:

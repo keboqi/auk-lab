@@ -68,14 +68,19 @@ class BackendClient:
         self.http = httpx.AsyncClient(timeout=httpx.Timeout(900, connect=10), transport=transport)
 
     async def status(self, model: str) -> dict:
+        variant = model.removeprefix("official_")
+        if model not in self.urls:
+            return dict(ready=False, error="Backend endpoint is not configured")
         try:
             response = await self.http.get(self.urls[model] + "/health", timeout=3)
             response.raise_for_status()
+            if model.startswith("official_") and response.json().get("backend") != "official":
+                return dict(ready=False, error="Endpoint is not the official AuK Python adapter")
             models = await self.http.get(self.urls[model] + "/v1/models", timeout=3)
             models.raise_for_status()
             ids = [entry.get("id", "") for entry in models.json().get("data", [])]
-            ready = MODELS[model] in ids
-            return dict(ready=ready, models=ids, error=None if ready else "Endpoint is not serving " + MODELS[model])
+            ready = MODELS[variant] in ids
+            return dict(ready=ready, models=ids, error=None if ready else "Endpoint is not serving " + MODELS[variant])
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             return dict(ready=False, error=str(exc) or type(exc).__name__)
 

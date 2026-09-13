@@ -6,6 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY lab ./lab
 COPY static ./static
+COPY tools ./tools
 ENV AUK_LAB_DATA=/data PYTHONUNBUFFERED=1
 EXPOSE 7865
 CMD ["uvicorn", "lab.app:app", "--host", "0.0.0.0", "--port", "7865", "--workers", "1"]

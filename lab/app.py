@@ -29,6 +29,8 @@ def create_app(data_dir=None, backend_client=None):
         client = backend_client or BackendClient({
             "flash": os.environ.get("AUK_FLASH_URL", "http://127.0.0.1:8101"),
             "base": os.environ.get("AUK_BASE_URL", "http://127.0.0.1:8102"),
+            "official_flash": os.environ.get("AUK_OFFICIAL_FLASH_URL", "http://127.0.0.1:8201"),
+            "official_base": os.environ.get("AUK_OFFICIAL_BASE_URL", "http://127.0.0.1:8202"),
         })
         app.state.store = store
         app.state.runner = Runner(store, client)
@@ -55,8 +57,9 @@ def create_app(data_dir=None, backend_client=None):
 
     @app.get("/api/status")
     async def status():
-        results = await asyncio.gather(*(app.state.runner.client.status(model) for model in ("flash", "base")))
-        return dict(models=dict(zip(("flash", "base"), results)), queued=app.state.runner.queue.qsize())
+        endpoints = ("flash", "base", "official_flash", "official_base")
+        results = await asyncio.gather(*(app.state.runner.client.status(model) for model in endpoints))
+        return dict(models=dict(zip(endpoints, results)), queued=app.state.runner.queue.qsize())
 
     @app.post("/api/sources")
     async def upload(file: UploadFile = File(...), start: float = Form(0), end: float | None = Form(None)):
@@ -100,7 +103,7 @@ def create_app(data_dir=None, backend_client=None):
                 payload["ref_audio"] = "[uploaded audio, encoded as a data URL]"
             if "ref_audio" in payload.get("metadata", {}).get("tts_params", {}):
                 payload["metadata"]["tts_params"]["ref_audio"] = "[uploaded audio, encoded as a data URL]"
-            return dict(route=route, payload=payload, duration=duration)
+            return dict(backend=request.backend, route=route, payload=payload, duration=duration)
         except (ValueError, FileNotFoundError) as exc:
             raise HTTPException(422, str(exc)) from exc
 
@@ -178,7 +181,7 @@ def create_app(data_dir=None, backend_client=None):
         if format != "csv":
             raise HTTPException(422, "Choose json or csv")
         output = io.StringIO(newline="")
-        fields = ["job_id", "task", "model", "seed", "status", "latency_seconds", "duration", "rtf",
+        fields = ["job_id", "task", "backend", "model", "seed", "status", "latency_seconds", "duration", "rtf",
                   "duration_error_ms", "peak_dbfs", "rms_dbfs", "clipped_percent", "verdict", "content",
                   "identity", "instruction", "quality", "notes", "error"]
         writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")

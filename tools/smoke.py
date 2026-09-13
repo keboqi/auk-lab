@@ -10,9 +10,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:7865")
     parser.add_argument("--model", choices=["flash", "base", "both"], default="flash")
+    parser.add_argument("--backend", choices=["sglang", "official", "both"], default="sglang")
     args = parser.parse_args()
     with httpx.Client(base_url=args.url.rstrip("/"), timeout=30) as client:
-        response = client.post("/api/jobs", json={"task": "voice_design", "models": ["flash", "base"] if args.model == "both" else [args.model],
+        response = client.post("/api/jobs", json={"task": "voice_design", "backend": args.backend,
+                                                "models": ["flash", "base"] if args.model == "both" else [args.model],
                                                 "text": "Welcome to the speech laboratory.",
                                                 "instruction": "A clear, calm, natural speaking voice.", "duration": 3, "seed": 1234})
         response.raise_for_status()

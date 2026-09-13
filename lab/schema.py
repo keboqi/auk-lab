@@ -8,6 +8,7 @@ from .catalog import BY_ID
 class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     task: str
+    backend: Literal["sglang", "official", "both"] = "sglang"
     models: list[Literal["flash", "base"]] = Field(default_factory=lambda: ["flash"], min_length=1, max_length=2)
     source_id: str | None = None
     text: str = Field(default="", max_length=6000)

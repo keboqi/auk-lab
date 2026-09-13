@@ -19,7 +19,7 @@ def command(model_path=None, encoder_path=None):
             "--auk_engine.factory.max_batch_size", os.environ.get("AUK_DIT_BATCH", "2"),
             "--decode.factory.max_batch_size", os.environ.get("AUK_DECODE_BATCH", "1"),
             "--auk_engine.factory.max_seconds", "30",
-            "--auk_engine.factory.weight_dtype", os.environ.get("AUK_WEIGHT_DTYPE", "bfloat16"),
+            "--auk_engine.factory.weight_dtype", os.environ.get("AUK_WEIGHT_DTYPE", "float32"),
             "--auk_engine.factory.nfe", os.environ.get("AUK_BASE_NFE", "32"),
             "--auk_engine.factory.cfg_strength", os.environ.get("AUK_BASE_CFG", "2.0")]
     if encoder_path:

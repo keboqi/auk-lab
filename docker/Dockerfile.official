@@ -1,0 +1,20 @@
+# Share the verified Blackwell CUDA stack, but execute Tencent's Python model.
+ARG OMNI_IMAGE=hongccc/sglang-omni@sha256:ebe4239e29a764ee3a2806385c061c5fd438a26f01458e503d3822dcba5790df
+FROM ${OMNI_IMAGE}
+ARG OFFICIAL_REVISION=0dfd4d39015078351217b09a40e263355aaa646b
+ENV SGLANG_OMNI_AUTO_CLONE=0 PYTHONUNBUFFERED=1
+WORKDIR /opt/auk-official
+RUN curl --fail --location --retry 3 "https://codeload.github.com/Tencent-Hunyuan/AuK/tar.gz/${OFFICIAL_REVISION}" \
+    | tar -xz --strip-components=1 -C /opt/auk-official
+# Preserve the image's compiled Torch/CUDA/Transformers ABI. Upstream's default
+# torch<2.8 dependency must not replace this preinstalled Blackwell stack.
+RUN python3 -c "import importlib.metadata as m; names=['torch','torchaudio','torchvision','transformers','numpy']; print('\n'.join(n+'=='+m.version(n) for n in names))" > /tmp/platform-constraints.txt \
+    && python3 -m pip install -c /tmp/platform-constraints.txt \
+      qwen-omni-utils==0.0.9 torchdiffeq==0.2.5 x-transformers==2.28.4 'omegaconf>=2.3.0' 'accelerate>=0.33.0' fastapi uvicorn soundfile \
+    && python3 -m pip install --no-deps --no-build-isolation -e /opt/auk-official \
+    && python3 -c "from auk.infer.infer_auk import AukInfer; import soundfile; print(AukInfer.__name__)"
+COPY docker/official_server.py /opt/auk-official/official_server.py
+COPY lab/runtime.json /opt/auk-lab-runtime.json
+LABEL org.opencontainers.image.source="https://github.com/Tencent-Hunyuan/AuK" \
+      org.opencontainers.image.revision="${OFFICIAL_REVISION}"
+ENTRYPOINT ["python3", "/opt/auk-official/official_server.py"]
