@@ -11,8 +11,10 @@ RUN curl --fail --location --retry 3 "https://codeload.github.com/Tencent-Hunyua
 RUN python3 -c "import importlib.metadata as m; names=['torch','torchaudio','torchvision','transformers','numpy']; print('\n'.join(n+'=='+m.version(n) for n in names))" > /tmp/platform-constraints.txt \
     && python3 -m pip install -c /tmp/platform-constraints.txt \
       qwen-omni-utils==0.0.9 torchdiffeq==0.2.5 x-transformers==2.28.4 'omegaconf>=2.3.0' 'accelerate>=0.33.0' fastapi uvicorn soundfile \
-    && python3 -m pip install --no-deps --no-build-isolation -e /opt/auk-official \
-    && python3 -c "from auk.infer.infer_auk import AukInfer; import soundfile; print(AukInfer.__name__)"
+    && python3 -m pip install --no-deps --no-build-isolation -e /opt/auk-official
+COPY docker/official_runtime.py /opt/auk-official/official_runtime.py
+# Exercise the same import path during the build and actual server startup.
+RUN python3 -c "from official_runtime import load_auk_infer; import soundfile; print(load_auk_infer().__name__)"
 COPY docker/official_server.py /opt/auk-official/official_server.py
 COPY lab/runtime.json /opt/auk-lab-runtime.json
 LABEL org.opencontainers.image.source="https://github.com/Tencent-Hunyuan/AuK" \

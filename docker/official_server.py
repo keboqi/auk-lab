@@ -19,6 +19,11 @@ import soundfile as sf
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 
+if __package__:
+    from .official_runtime import load_auk_infer
+else:
+    from official_runtime import load_auk_infer
+
 
 def parse_request(body, speech=False):
     if body.get('stream'):
@@ -142,7 +147,7 @@ def create_app(engine_factory=None, seed_fn=None, tensor_fn=None):
 def load_engine(variant):
     import torch
     from huggingface_hub import snapshot_download
-    from auk.infer.infer_auk import AukInfer
+    AukInfer = load_auk_infer()
     if not torch.cuda.is_available():
         raise RuntimeError('CUDA is required; check NVIDIA Container Toolkit')
     runtime = json.loads(Path('/opt/auk-lab-runtime.json').read_text())

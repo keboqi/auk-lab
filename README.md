@@ -104,6 +104,12 @@ of Tencent's recommended environment. The official container runs no SGLang
 model or scheduler. Its HTTP adapter implements only the lab's WAV, nonstreaming
 requests; it is not a general OpenAI API server.
 
+The adapter suppresses optional `flash_attn` discovery while importing AuK,
+because the shared image exposes a namespace without the legacy functions AuK
+tries to import. Official inference already selects PyTorch attention. The
+build check and server startup use the same import helper; model source and
+installed CUDA packages are unchanged.
+
 Both use raw instructions without the optional Prompt Enhancer, ASR, VAD, or
 task-specific loudness processing. This keeps the first editing comparison
 focused on model implementation. It does not reproduce the official Gradio
