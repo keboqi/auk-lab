@@ -22,9 +22,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 
 if __package__:
-    from .official_runtime import load_auk_infer
+    from .official_runtime import load_auk_infer, check_reference_audio
 else:
-    from official_runtime import load_auk_infer
+    from official_runtime import load_auk_infer, check_reference_audio
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,7 @@ def create_app(engine_factory=None, seed_fn=None, tensor_fn=None):
 
 
 def load_engine(variant):
+    check_reference_audio()
     import torch
     from huggingface_hub import snapshot_download
     AukInfer = load_auk_infer()

@@ -118,6 +118,11 @@ across implementations.
 
 ## Investigate edits that reproduce the source
 
+The official image explicitly installs `audioread`, which Qwen's audio utility
+imports but does not declare as a dependency. Build and startup checks exercise
+the real Qwen reference loader on a temporary 24 kHz WAV and verify its 16 kHz
+output before GPU weights load. The probe never becomes a generated result.
+
 If the official backend returns HTTP 500, inspect
 `docker compose logs --tail=150 official-flash` (or `official-base`). The adapter
 returns the exception type/message and an error ID to the lab, and logs the full
