@@ -118,6 +118,12 @@ across implementations.
 
 ## Investigate edits that reproduce the source
 
+If the official backend returns HTTP 500, inspect
+`docker compose logs --tail=150 official-flash` (or `official-base`). The adapter
+returns the exception type/message and an error ID to the lab, and logs the full
+traceback with the same ID. HTTP 500 indicates a runtime failure; it does not
+establish that the editing instruction is unsupported.
+
 The original launcher forced BF16 DiT weight storage. The default now follows
 SGLang's upstream parity recipe: **FP32 DiT storage with BF16 autocast**. This
 removes one numerical difference; it is **not a confirmed fix** for ignored edits.

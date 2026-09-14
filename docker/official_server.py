@@ -8,11 +8,13 @@ import binascii
 from contextlib import asynccontextmanager
 import io
 import json
+import logging
 import math
 import os
 from pathlib import Path
 import tempfile
 import threading
+import uuid
 
 import numpy as np
 import soundfile as sf
@@ -23,6 +25,8 @@ if __package__:
     from .official_runtime import load_auk_infer
 else:
     from official_runtime import load_auk_infer
+
+logger = logging.getLogger(__name__)
 
 
 def parse_request(body, speech=False):
@@ -115,6 +119,7 @@ def create_app(engine_factory=None, seed_fn=None, tensor_fn=None):
             else:
                 seed_fn(seed)
             engine = app.state.engine
+            inference_failed = False
             try:
                 output, rate = engine.generate(messages, audio=audio_arg, gen_seconds=duration, seed=seed,
                                               nfe=int(os.environ.get('AUK_BASE_NFE', '32')),
@@ -125,21 +130,43 @@ def create_app(engine_factory=None, seed_fn=None, tensor_fn=None):
                 stream = io.BytesIO()
                 sf.write(stream, wave, rate, format='WAV', subtype='FLOAT')
                 data = stream.getvalue()
+            except BaseException:
+                inference_failed = True
+                raise
             finally:
-                engine.model.transformer.clear_cache()
+                try:
+                    engine.model.transformer.clear_cache()
+                except Exception:
+                    if not inference_failed:
+                        raise
+                    logger.exception('Cache cleanup also failed after an inference error')
         if speech:
             return Response(data, media_type='audio/wav')
         return {'audio': {'data': base64.b64encode(data).decode(), 'format': 'wav'},
                 'meta_info': {'finish_reason': {'type': 'stop'}, 'completion_tokens': len(wave)//480,
                               'weight_version': 'official-python'}}
 
+    def handle(body, speech):
+        try:
+            return generate(body, speech)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            error_id = uuid.uuid4().hex[:12]
+            # Keep the full traceback in container logs and show the cause in
+            # the lab instead of Starlette's uninformative "Internal Server Error".
+            logger.exception('Official AuK inference failed [%s] model=%s route=%s',
+                             error_id, variant, 'speech' if speech else 'generate')
+            detail = f'Official AuK {type(exc).__name__}: {str(exc)[:450]} [error {error_id}]'
+            raise HTTPException(500, detail) from exc
+
     @app.post('/generate')
     def edit(body: dict):
-        return generate(body, False)
+        return handle(body, False)
 
     @app.post('/v1/audio/speech')
     def speech(body: dict):
-        return generate(body, True)
+        return handle(body, True)
 
     return app
 

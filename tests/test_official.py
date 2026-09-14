@@ -83,6 +83,29 @@ def test_official_speech_templates_and_invalid_reference():
         parse_request(speech, True)
 
 
+@pytest.mark.parametrize('cleanup_fails', [False, True])
+def test_inference_error_reaches_client_without_cleanup_masking_it(cleanup_fails, caplog):
+    def clear_cache():
+        if cleanup_fails:
+            raise RuntimeError('secondary cleanup failure')
+    class BrokenEngine:
+        model = SimpleNamespace(transformer=SimpleNamespace(clear_cache=clear_cache))
+        def generate(self, *args, **kwargs):
+            raise RuntimeError('test reference encoder failure')
+    app = create_app(lambda _: BrokenEngine(), seed_fn=lambda _: None, tensor_fn=lambda a: a)
+    request = RunRequest(task='custom', source_id='a'*32, instruction='Change the words')
+    route, payload, _ = build_request(request, 'flash', wav(), .2, 1234)
+    with TestClient(app) as client:
+        response = client.post(route, json=payload)
+        assert response.status_code == 500
+        detail = response.json()['detail']
+        assert 'RuntimeError: test reference encoder failure' in detail
+        assert 'secondary cleanup failure' not in detail
+        assert '[error ' in detail
+        assert 'test reference encoder failure' in caplog.text
+        assert 'data:audio/wav' not in caplog.text
+
+
 @pytest.mark.parametrize('task', ['voice_design', 'custom'])
 def test_backend_comparison_dispatch_and_provenance(tmp_path, task):
     calls = []
